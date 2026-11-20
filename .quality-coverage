@@ -1,0 +1,3 @@
+# Testabdeckung (Zeilen, Prozent) je Paket und Stack; Basis für quality.sh.
+# Steigt automatisch mit. Senken nur mit coverage-update und Freigabe (QUALITY.md).
+.:rust 86.0

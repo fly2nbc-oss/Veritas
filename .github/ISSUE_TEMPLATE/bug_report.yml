@@ -1,0 +1,70 @@
+name: Bug report
+description: Something in Veritas does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A description is enough – please don't attach private files or paths you don't want to share.
+        *F1 ▸ “Über Veritas” (About Veritas) ▸ “Fehler auf GitHub melden” (Report a bug on GitHub)* fills in the version and the system.
+  - type: input
+    id: version
+    attributes:
+      label: Veritas version
+      description: F1 ▸ “Über Veritas” (About Veritas) shows it.
+      placeholder: "e.g. 1.2.3"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows (x86_64) / Ubuntu 24.04 LTS (x86_64)"
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - Windows installer
+        - Windows zip (portable)
+        - Linux AppImage
+        - Linux .deb
+        - Built from source
+  - type: dropdown
+    id: action
+    attributes:
+      label: What were you doing?
+      multiple: true
+      options:
+        - Opening a folder
+        - “MD5 erzeugen” (create MD5)
+        - “Prüfen” (verify)
+        - Integrity check (damaged / intact)
+        - History (JSON)
+        - User interface
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      placeholder: |
+        1. Open a folder with …
+        2. Press …
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        `crash.log` after a crash (earlier versions: `absturz.log`), `veritas.log` when the display froze (Windows `%APPDATA%\Veritas\data`, Linux `~/.local/share/veritas`). Look through it first – it can name paths and file names.
+      render: text

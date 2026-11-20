@@ -1,0 +1,60 @@
+Veritas
+Copyright 2026 fly2nbc-oss
+
+Veritas includes third-party components. Their terms are in THIRD_PARTY.md
+in this folder. Veritas's own code is under the Apache License, Version 2.0
+(see LICENSE). The program icon (assets/icon.ico, assets/icon.png) is
+original work by fly2nbc-oss and is also under Apache-2.0.
+
+Embedded in the binary (Noto Sans and DejaVu Sans Mono in the Linux build
+only, egui's fonts in the Windows build only):
+
+- Noto Sans Regular and SemiBold (version 2.015)
+  SIL Open Font License 1.1, Copyright 2022 The Noto Project Authors
+  https://github.com/notofonts/latin-greek-cyrillic
+  License text: OFL-NotoSans.txt
+
+- DejaVu Sans Mono (version 2.37)
+  Bitstream Vera Fonts License, Copyright 2003 Bitstream, Inc.;
+  DejaVu changes are in the public domain
+  https://dejavu-fonts.github.io/
+  License text: DejaVu-license.txt
+
+- Lucide icons (a subset of the icon font, lucide-static 0.460.0)
+  ISC, Copyright Lucide Icons and Contributors; portions Copyright Cole Bemis
+  2013-present as part of Feather (MIT)
+  https://lucide.dev
+  License text: Lucide-license.txt
+
+- egui's fonts (epaint_default_fonts 0.37.0): Ubuntu-Light
+  (Ubuntu Font Licence 1.0, Canonical Ltd.), egui-icons (a subset of
+  emoji-icon-font, MIT, Copyright 2014 John Slegers) and Hack (MIT,
+  Copyright 2018 Source Foundry Authors; Bitstream Vera License,
+  Copyright 2003 Bitstream, Inc.)
+  https://github.com/emilk/egui
+  License texts: egui-fonts-license.txt
+
+- Rust crates; names and versions are in Cargo.lock in the source code;
+  mostly MIT or Apache-2.0, a few with BSD, ISC, Zlib, BSL-1.0,
+  Unicode-3.0 or Unlicense (see THIRD_PARTY.md and deny.toml)
+
+Statically linked (Windows):
+
+- Microsoft Visual C++ runtime (C runtime), statically linked into
+  veritas.exe on Windows; no DLLs are included.
+  Microsoft Visual Studio license terms ("Distributable Code"),
+  Copyright Microsoft Corporation
+
+Loaded from the system at run time, not distributed:
+
+- Segoe UI, Segoe UI Semibold and Consolas (Windows), Noto Sans and
+  DejaVu Sans (Linux) as the interface and monospace fonts, if present;
+  for Chinese, Japanese and Korean file names, at the first such
+  character, a CJK font of the system (Microsoft YaHei, Yu Gothic,
+  Malgun Gothic or Noto Sans CJK). They remain the property of their
+  owners.
+
+- The system's OpenGL (graphics driver) and the program the system
+  provides for opening a file or a link (on Linux through xdg-open).
+
+Source code: https://github.com/fly2nbc-oss/Veritas

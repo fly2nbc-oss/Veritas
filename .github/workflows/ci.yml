@@ -1,0 +1,370 @@
+name: CI
+
+# What runs when:
+#   workflows            always: actionlint and zizmor over this workflow (seconds)
+#   linux                always: scripts/quality.sh all (guard check, fmt, clippy, tests
+#                        with coverage, osv-scanner), cargo deny
+#   windows              public repository: always; private repository (minutes cost
+#                        money, Windows twice): only `v*` tags and manual runs
+#   package-*, test-linux-packages
+#                        the same condition as `windows`, but never on pull requests;
+#                        the packages are kept 7 days as run artifacts
+#   release              `v*` tags only: draft release with checksums and, in a public
+#                        repository, a build provenance attestation
+# The condition is repeated in each job that only runs then.
+#
+# Every action is pinned to a commit, the version follows as a comment;
+# Dependabot (.github/dependabot.yml) keeps them current, zizmor checks the workflow.
+#
+# The caches of the test jobs carry `zizmor: ignore[cache-poisoning]`: GitHub restores a
+# tag's caches only from the tag itself or from main, and whoever can write main's cache
+# can already change the release. The jobs that build the release files and the release
+# job use no cache at all.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**", "screenshots/**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      test_rounds:
+        description: "How often the tests run (to measure a flaky test; every round counts)"
+        default: "1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Read-only by default; only the release job may write (it drafts the release).
+permissions:
+  contents: read
+
+jobs:
+  # Seconds. actionlint also runs shellcheck over every bash `run:` block. Both tools are
+  # pinned by version and SHA-256, zizmor by the action's hash-checked lock. Its online
+  # audits (impostor commits, known vulnerable actions) use the run's token; findings fail
+  # the job, nothing is uploaded.
+  workflows:
+    name: Lint workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tools
+        run: |
+          tools="$RUNNER_TEMP/lint"
+          mkdir -p "$tools/bin"
+          fetch() { # file url sha256
+            curl -fsSL --retry 3 -o "$tools/$1" "$2"
+            echo "$3  $tools/$1" | sha256sum --check --quiet
+          }
+          fetch actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          fetch shellcheck.tar.xz \
+            https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz \
+            8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+          tar -xzf "$tools/actionlint.tar.gz" -C "$tools/bin" actionlint
+          tar -xJf "$tools/shellcheck.tar.xz" -C "$tools/bin" --strip-components=1 shellcheck-v0.11.0/shellcheck
+          # Before the runner's own shellcheck, so actionlint uses the pinned one too.
+          echo "$tools/bin" >> "$GITHUB_PATH"
+      - name: Workflow (actionlint + shellcheck)
+        run: |
+          shellcheck --version
+          actionlint -version
+          actionlint -color
+      - name: Workflow security (zizmor)
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          version: 1.31.1
+          advanced-security: false
+          annotations: true
+
+  linux:
+    name: Lint & test (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # full history: the guard check compares with the state before the push
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, 2026-10-16
+        with:
+          toolchain: 1.99.0 # like rust-toolchain.toml, otherwise rustup installs a second one
+          components: rustfmt, clippy, llvm-tools-preview
+      # Coverage (.quality-coverage) and known vulnerabilities (osv.dev); install-action
+      # checks the SHA-256 of each download.
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-llvm-cov
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: osv-scanner@2.6.0
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3 # zizmor: ignore[cache-poisoning]
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libx11-dev
+      # Guard check, fmt, clippy, tests with coverage, osv-scanner (scripts/quality.sh).
+      - name: Quality
+        run: bash scripts/quality.sh all
+        env:
+          CI: "true"
+          # push: guard check against the state before the push; pull request: against its base
+          QUALITY_BASE: ${{ github.event.before }}
+      # A manual run can repeat the tests (`test_rounds` > 1): round 1 is the Quality step,
+      # this step runs the others and fails when any of them failed.
+      - name: Repeat tests
+        if: inputs.test_rounds && inputs.test_rounds != '1'
+        env:
+          ROUNDS: ${{ inputs.test_rounds }}
+        run: |
+          [[ "$ROUNDS" =~ ^[1-9][0-9]?$ ]] || { echo "::error::test_rounds must be 1-99"; exit 1; }
+          failed=0
+          for round in $(seq 2 "$ROUNDS"); do
+            if ! cargo test --locked; then
+              failed=$((failed + 1))
+              echo "::warning::test round $round of $ROUNDS failed"
+            fi
+          done
+          echo "$failed of $((ROUNDS - 1)) repeated test rounds failed"
+          if [ "$failed" -gt 0 ]; then exit 1; fi
+      # Known vulnerabilities, licenses and sources of the locked dependencies (deny.toml).
+      - uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-deny
+      - run: cargo deny --locked check
+
+  windows:
+    name: Test & build (Windows)
+    # full: public repository, tag or manual run
+    if: github.event.repository.private == false || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, 2026-10-16
+        with:
+          toolchain: 1.99.0 # like rust-toolchain.toml, otherwise rustup installs a second one
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3 # zizmor: ignore[cache-poisoning]
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Test
+        shell: pwsh
+        env:
+          ROUNDS: ${{ inputs.test_rounds || '1' }}
+        run: |
+          if ($env:ROUNDS -notmatch '^[1-9][0-9]?$') { Write-Output "::error::test_rounds must be 1-99"; exit 1 }
+          $rounds = [int]$env:ROUNDS
+          $failed = 0
+          for ($round = 1; $round -le $rounds; $round++) {
+            cargo test --locked
+            if ($LASTEXITCODE) {
+              $failed++
+              Write-Output "::warning::test round $round of $rounds failed"
+            }
+          }
+          Write-Output "$failed of $rounds test rounds failed"
+          if ($failed) { exit 1 }
+
+  package-windows:
+    name: Package (Windows installer, portable)
+    # full, but not for pull requests
+    if: github.event_name != 'pull_request' && (github.event.repository.private == false || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+    needs: windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, 2026-10-16
+        with:
+          toolchain: 1.99.0 # like rust-toolchain.toml, otherwise rustup installs a second one
+      - name: cargo-packager
+        run: cargo install cargo-packager --version 0.11.8 --locked
+      - name: Build (release)
+        run: cargo build --release --locked
+      - name: Package
+        run: ./packaging/windows/build.ps1
+      - name: Install, start and uninstall
+        run: ./packaging/windows/test-installer.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-installer
+          path: dist/windows/*-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-portable
+          path: dist/windows/*-portable.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  package-linux:
+    name: Package (Linux AppImage, deb)
+    # full, but not for pull requests
+    if: github.event_name != 'pull_request' && (github.event.repository.private == false || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+    needs: linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, 2026-10-16
+        with:
+          toolchain: 1.99.0 # like rust-toolchain.toml, otherwise rustup installs a second one
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libx11-dev patchelf file
+      - name: cargo-deb
+        run: cargo install cargo-deb --version 3.8.0 --locked
+      - name: Build (release)
+        run: cargo build --release --locked
+      - name: Package
+        run: ./packaging/linux/build.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-appimage
+          path: dist/linux/*.AppImage
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-deb
+          path: dist/linux/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  test-linux-packages:
+    name: Install test (${{ matrix.package }}, ${{ matrix.image }})
+    needs: package-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:24.04", "debian:trixie"]
+        package: [appimage, deb]
+    container: ${{ matrix.image }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "linux-*"
+          merge-multiple: true
+          path: pkg
+      - run: apt-get update
+      - name: AppImage
+        if: matrix.package == 'appimage'
+        run: |
+          apt-get install -y --no-install-recommends xvfb xauth mesa-vulkan-drivers libgl1-mesa-dri \
+            libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libx11-6 libx11-xcb1 libxcursor1 \
+            libxi6 libxcb1 libwayland-client0
+          chmod +x pkg/*.AppImage
+          APPIMAGE_EXTRACT_AND_RUN=1 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a timeout 30 pkg/veritas_*_x86_64.AppImage \
+            >veritas.log 2>&1 || true
+      - name: deb
+        if: matrix.package == 'deb'
+        run: |
+          apt-get install -y ./pkg/veritas_*_amd64.deb
+          apt-get install -y --no-install-recommends xvfb xauth
+          ldd /usr/bin/veritas | tee ldd.txt
+          if grep -q "not found" ldd.txt; then exit 1; fi
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a timeout 30 veritas >veritas.log 2>&1 || true
+      - name: Veritas opened its window
+        run: |
+          cat veritas.log
+          grep -q "start-up: window ready" veritas.log
+
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [workflows, linux, windows, package-windows, package-linux, test-linux-packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # the draft release
+      id-token: write # the signing certificate of the provenance attestation
+      attestations: write # storing the attestation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag matches Cargo.toml
+        id: version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the version in Cargo.toml ($version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "{windows-*,linux-*}"
+          merge-multiple: true
+          path: release
+      # The notes are the version's CHANGELOG.md section; without one the release stops.
+      - name: Checksums and release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PUBLIC: ${{ github.event.repository.private == false }}
+        run: |
+          (cd release && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          awk -v v="$VERSION" '
+            /^## \[/ { if (found) exit; found = index($0, "## [" v "]") == 1; next }
+            found' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section '## [$VERSION]' (or it is empty) - the release notes come from it"
+            exit 1
+          fi
+          cat >> notes.md <<EOF
+
+          ### Downloads
+
+          | File | For |
+          |---|---|
+          | \`veritas_${VERSION}_x64-setup.exe\` | Windows 10/11 installer – per user, no admin rights |
+          | \`veritas_${VERSION}_x64-portable.zip\` | Windows portable – unzip and run \`Veritas\\veritas.exe\` |
+          | \`veritas_${VERSION}_x86_64.AppImage\` | Linux portable – glibc 2.39 or newer (Ubuntu 24.04, Debian 13) |
+          | \`veritas_${VERSION}_amd64.deb\` | Ubuntu 24.04+, Debian 13+ |
+          | \`SHA256SUMS.txt\` | SHA-256 checksums of all files above |
+
+          The Windows files are not signed yet: SmartScreen asks once (*More info*, then *Run anyway*). On Linux the window needs OpenGL and \`libxkbcommon-x11\`; double-clicking a file opens it with \`xdg-open\` (\`xdg-utils\`).
+          EOF
+          if [ "$PUBLIC" = true ]; then
+            cat >> notes.md <<EOF
+
+          Every file was built by this repository's CI from the tag and carries a build provenance attestation: \`gh attestation verify <file> --repo $GITHUB_REPOSITORY\` checks it.
+          EOF
+          fi
+      # Attestations need a public repository (or an enterprise plan).
+      - name: Build provenance
+        if: github.event.repository.private == false
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/*
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" release/* --draft --verify-tag
+          --title "Veritas $VERSION" --notes-file notes.md
