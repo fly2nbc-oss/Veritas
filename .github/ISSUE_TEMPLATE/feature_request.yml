@@ -1,0 +1,32 @@
+name: Feature request
+description: An idea that makes checking files with Veritas simpler or safer.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Veritas is meant to stay lean, local and usable from the keyboard. Please describe the problem first – the best solution often looks different from the first idea.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you work around it today?
+  - type: input
+    id: version
+    attributes:
+      label: Veritas version
+      placeholder: "e.g. 1.2.3"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows (x86_64)"

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Starts Veritas inside the AppImage and stays in the caller's directory.
+here="$(dirname "$(readlink -f "$0")")"
+exec "$here/usr/bin/veritas" "$@"

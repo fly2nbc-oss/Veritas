@@ -1,0 +1,22 @@
+{
+  "format": "veritas-verlauf-1",
+  "runs": [
+    {
+      "timestamp": "2026-08-02T18:30:00+00:00",
+      "base_directory": "/home/beispiel/Bilder/Urlaub 2026",
+      "hash_mode": "md5",
+      "action": "created",
+      "baseline": true,
+      "unchanged_count": 0,
+      "file_count": 14,
+      "modified": [],
+      "added": [],
+      "removed": [],
+      "errors": [],
+      "skipped_symlinks": 0,
+      "skipped_non_regular": 0,
+      "cancelled": false,
+      "warnings": []
+    }
+  ]
+}

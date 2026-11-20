@@ -1,0 +1,142 @@
+[package]
+name = "veritas"
+version = "0.8.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/fly2nbc-oss/Veritas"
+description = "Local tool for MD5 checksums and file integrity checks"
+readme = "README.md"
+# Built and checked with 1.99.0 (rust-toolchain.toml); egui/eframe 0.37 need 1.95.
+rust-version = "1.99"
+authors = ["Veritas Contributors"]
+keywords = ["checksum", "md5", "integrity", "egui"]
+categories = ["gui"]
+
+[dependencies]
+# Without `accesskit`: the Linux AT-SPI stack pulls in quick-xml 0.30 (RUSTSEC-2026-0194/0195).
+# Without `default_fonts` (added on Windows only, see below) and without `links`: that would pull
+# in `webbrowser`, `url` and the ICU data; the links in "Über Veritas" are opened by `open`.
+eframe = { version = "0.37.0", default-features = false, features = ["clipboard", "glow", "persistence", "wayland", "x11"] }
+egui = "0.37.0"
+# PNG des Screenshot-Modus (`src/screenshot.rs`). Kommt ohnehin über eframe; nur PNG.
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+jiff = "1.0.1"
+log = "0.4.34"
+md-5 = "0.11.0"
+# Opens a file in its associated program (double-click in the list).
+open = "5.3.2"
+rayon = "1.10"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+# SHA-1 nur zum Prüfen fremder `.sha1`/`SHA1SUMS`; geschrieben wird immer MD5.
+sha1 = "0.11.0"
+sha2 = "0.11.1"
+# The system language on first start (`i18n::system_default`); no dependencies on Windows
+# and Linux.
+sys-locale = "0.3.2"
+# Deleting moves to the trash (Windows: shell, Linux: freedesktop.org trash).
+trash = "5.2.9"
+walkdir = "2.5.0"
+
+# Strict profile against crashes and leaks; `clippy.toml` allows unwrap, expect and panic in
+# tests. `unsafe_code` is `deny` rather than `forbid`: three Windows calls need `unsafe`
+# (`drive::seek_penalty`, `system::no_trash`, `tree::filesystem_roots`). Only these functions
+# carry `#[allow(unsafe_code)]`, and every block a `// SAFETY:` comment.
+[lints.rust]
+unsafe_code = "deny"                # only the three Windows functions above, each with #[allow(unsafe_code)]
+
+[lints.clippy]
+unwrap_used = "deny"                # unwrap(): crashes on None or Err; use ? or an error message instead
+expect_used = "deny"                # expect(): the same crash, only with a message
+panic = "deny"                      # panic!(): a crash instead of an error message
+todo = "deny"                       # todo!(): an unfinished branch would crash only on the user's machine
+unimplemented = "deny"              # unimplemented!(): likewise
+string_slice = "deny"               # &s[a..b] on a str: crashes when the cut lands inside a multi-byte character such as an umlaut
+unchecked_time_subtraction = "deny" # Instant - Duration, Duration - Duration: crashes on underflow (Windows shortly after boot)
+mem_forget = "deny"                 # mem::forget: the destructor never runs, a file, lock or memory stays held
+large_stack_arrays = "deny"         # large array on the stack: stack overflow
+undocumented_unsafe_blocks = "deny" # every unsafe block justified with // SAFETY:
+
+# Windows embeds no interface font (Segoe UI and Consolas come from the system, see
+# `src/fonts.rs`). egui's fonts (Ubuntu-Light, Hack: 0.67 MB) are the last fallback there, so
+# that no family is empty. On Linux, Noto Sans and DejaVu Sans Mono are embedded and
+# `default_fonts` stays off.
+[target.'cfg(windows)'.dependencies]
+eframe = { version = "0.37.0", default-features = false, features = ["default_fonts"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1.31"
+
+# Windows installer (NSIS) via cargo-packager. It packs the same folder as the portable zip.
+[package.metadata.packager]
+product-name = "Veritas"
+identifier = "io.github.fly2nbc-oss.veritas"
+publisher = "fly2nbc-oss"
+authors = ["fly2nbc-oss <fly2nbc@gmail.com>"]
+homepage = "https://github.com/fly2nbc-oss/Veritas"
+category = "Utility"
+formats = ["nsis"]
+binaries-dir = "dist/windows/Veritas"
+out-dir = "dist/windows"
+resources = [
+    "dist/windows/Veritas/LICENSE",
+    "dist/windows/Veritas/NOTICE",
+    "dist/windows/Veritas/THIRD_PARTY.md",
+    "dist/windows/Veritas/*.txt",
+]
+
+# Per-user installation to %LOCALAPPDATA%\Veritas, without administrator rights.
+[package.metadata.packager.nsis]
+installer-icon = "assets/icon.ico"
+installer-mode = "currentUser"
+languages = ["English", "German"]
+
+# Linux .deb via cargo-deb. `$auto` appends the linked libraries.
+[package.metadata.deb]
+maintainer = "fly2nbc-oss <fly2nbc@gmail.com>"
+copyright = "fly2nbc-oss and contributors"
+license-file = ["LICENSE", "0"]
+extended-description = """\
+Veritas creates and verifies MD5 checksums for folders, records every run in \
+a JSON history and reports whether a media file whose checksum no longer \
+matches is still structurally intact."""
+section = "utils"
+priority = "optional"
+revision = ""
+depends = "$auto, libxcursor1, libxi6, libx11-6, libx11-xcb1, libxkbcommon0, libxkbcommon-x11-0, libxcb1, libwayland-client0, libgl1, libegl1"
+recommends = "xdg-utils, fonts-dejavu-core | fonts-noto-core"
+assets = [
+    ["target/release/veritas", "usr/bin/", "755"],
+    ["packaging/linux/veritas.desktop", "usr/share/applications/", "644"],
+    ["assets/icon.png", "usr/share/icons/hicolor/256x256/apps/veritas.png", "644"],
+    ["LICENSE", "usr/share/doc/veritas/", "644"],
+    ["NOTICE", "usr/share/doc/veritas/", "644"],
+    ["THIRD_PARTY.md", "usr/share/doc/veritas/", "644"],
+    ["assets/fonts/OFL-NotoSans.txt", "usr/share/doc/veritas/", "644"],
+    ["assets/fonts/DejaVu-license.txt", "usr/share/doc/veritas/", "644"],
+    ["assets/fonts/Lucide-license.txt", "usr/share/doc/veritas/", "644"],
+    ["assets/fonts/egui-fonts-license.txt", "usr/share/doc/veritas/", "644"],
+]
+
+# Small instead of fast: the interface hardly computes, the checksums are I/O-bound
+# (measured 2026-11-19: `"s"` gives 9.21 MB, `"z"` got bigger at 9.52 MB, the old profile
+# (opt-level 3, thin LTO, no strip) gave 11.16 MB). No `panic = "abort"`: `poll_job` catches a
+# crashed run thread and reports it instead of taking the window down. `strip = true` also
+# removes the function names from `crash.log` on Linux; the panic's message and location
+# remain.
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = true
+
+# The hash loops stay at full speed: without these overrides SHA-256 drops by about 14 %,
+# MD5 by about 2 % (hash_slice, 1 GiB, release build).
+[profile.release.package.md-5]
+opt-level = 3
+
+[profile.release.package.sha1]
+opt-level = 3
+
+[profile.release.package.sha2]
+opt-level = 3

@@ -1,0 +1,31 @@
+# --- Build and packages ---
+/target/
+/dist/
+**/*.rs.bk
+*.partial
+*.msi
+*-setup.exe
+*.deb
+*.rpm
+*.AppImage
+*.profraw
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- IDE and agents (not for delivery) ---
+.vscode/*
+!.vscode/extensions.json
+.idea
+.cursor/
+.claude/
+CLAUDE.local.md
+
+# --- Operating system and NAS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+@eaDir/
+\#recycle/

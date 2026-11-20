@@ -1,0 +1,11 @@
+# Approved findings of the guard check (QUALITY.md, guard check).
+# Entries only by a human or on their explicit instruction.
+# Format: <ID>  <date>  <reason>
+3eeff55411  2026-11-19  Approved 2026-11-19: CI toolchain pinned to 1.99.0 like rust-toolchain.toml instead of stable
+3035df49a9  2026-11-20  Comment translated to English for the public repository; no change to the check itself
+e4decfa3f5  2026-11-20  Comment translated to English for the public repository; no change to the check itself
+3e5d5159f3  2026-11-20  Comment translated to English for the public repository; no change to the check itself
+34ac3458c2  2026-11-20  Comment translated to English for the public repository; no change to the check itself
+c4c0c716cd  2026-11-20  Comment translated to English for the public repository; no change to the check itself
+b4640fe81c  2026-11-20  Comment translated to English for the public repository; no change to the check itself
+2786f5a066  2026-11-20  Comment translated to English for the public repository; no change to the check itself

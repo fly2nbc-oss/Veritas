@@ -1,0 +1,5 @@
+# Windows: link the C runtime statically. Then veritas.exe needs no VCRUNTIME140.dll and the
+# package no redistributable DLLs. An environment variable RUSTFLAGS overrides this file, so
+# `packaging/windows/build.ps1` checks that the exe has no imports of the dynamic runtime.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

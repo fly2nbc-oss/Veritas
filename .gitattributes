@@ -1,0 +1,29 @@
+# Line endings: LF in the repository, checked out as LF on every system.
+* text=auto eol=lf
+
+# Checksums and history: never CRLF, otherwise reading and comparing no longer work.
+*.md5    text eol=lf
+*.sha256 text eol=lf
+*.json   text eol=lf
+
+# Scripts stay LF. cmd.exe mishandles labels with LF, hence CRLF for .bat and .cmd.
+*.sh     text eol=lf
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Binary: never touch.
+*.icns   binary
+*.dmg    binary
+*.png    binary
+*.jpg    binary
+*.ico    binary
+*.pdf    binary
+*.ttf    binary
+*.exe    binary
+*.dll    binary
+
+# Generated: GitHub collapses it in the diff and leaves it out of the language statistics.
+Cargo.lock linguist-generated
+
+# Beispieldaten für das README-Bild: Bytes genau so, sonst stimmen die Prüfsummen nicht.
+docs/examples/** -text

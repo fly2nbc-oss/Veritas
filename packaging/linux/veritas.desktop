@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Veritas
+GenericName=Checksum tool
+GenericName[de]=Prüfsummenwerkzeug
+Comment=Create and verify MD5 checksums of folders
+Comment[de]=MD5-Prüfsummen von Ordnern erzeugen und prüfen
+Exec=veritas %f
+Icon=veritas
+Terminal=false
+Categories=Utility;FileTools;
+Keywords=checksum;md5;verify;integrity;hash;
+StartupWMClass=veritas

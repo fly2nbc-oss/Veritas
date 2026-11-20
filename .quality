@@ -1,0 +1,3 @@
+# Settings for scripts/quality.sh
+# The Linux CI measures coverage; locally (on Windows) other cfg code counts, the base would come out too high.
+COVERAGE_LOCAL=0

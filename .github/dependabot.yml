@@ -1,0 +1,29 @@
+# Keeps the pinned actions in ci.yml and the Rust dependencies up to date:
+# one grouped pull request per group each month. CI checks it.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7   # a new version must be a week old: time to pull back a faulty release
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    # The first matching group wins. What only works together goes together, even across
+    # big jumps: egui and eframe need the same version, md-5 and sha2 the same `digest`.
+    groups:
+      egui:
+        patterns: ["egui", "eframe"]
+      hashes:
+        patterns: ["md-5", "sha2"]
+      deps:
+        patterns: ["*"]
+        update-types: [minor, patch]
